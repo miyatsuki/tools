@@ -1,5 +1,8 @@
 import json
+import random
+import time
 from json import JSONDecodeError
+from typing import Optional
 
 import openai
 
@@ -68,3 +71,69 @@ def parse_llm_output_json(output: str, model: str = "gpt-3.5-turbo"):
         return json.loads(code_block)
     except:
         raise ValueError(output)
+
+
+def execute_openai(system_str: str, prompt: str, model: str = "gpt-3.5-turbo"):
+    response = openai.ChatCompletion.create(
+        model=model,
+        messages=[
+            {"role": "system", "content": system_str},
+            {"role": "user", "content": prompt},
+        ],
+        max_tokens=1024,
+        temperature=0,  # 生成する応答の多様性,
+    )
+
+    return response.choices[0]["message"]["content"]
+
+
+def execute_openai_for_json(system_str: str, prompt: str, model: str = "gpt-3.5-turbo"):
+    llm_result = execute_openai(system_str, prompt, model)
+    result = parse_llm_output_json(llm_result, model="gpt-4")
+    return result
+
+
+# define a retry decorator
+# https://github.com/openai/openai-cookbook/blob/main/examples/How_to_handle_rate_limits.ipynb
+def retry_with_exponential_backoff(
+    func,
+    initial_delay: float = 1,
+    exponential_base: float = 2,
+    jitter: bool = True,
+    max_retries: Optional[int] = 10,
+    errors: tuple = (openai.error.RateLimitError,),
+):
+    """Retry a function with exponential backoff."""
+
+    def wrapper(*args, **kwargs):
+        # Initialize variables
+        num_retries = 0
+        delay = initial_delay
+
+        # Loop until a successful response or max_retries is hit or an exception is raised
+        while True:
+            try:
+                return func(*args, **kwargs)
+
+            # Retry on specified errors
+            except errors as e:
+                # Increment retries
+                num_retries += 1
+
+                # Check if max retries has been reached
+                if max_retries and num_retries > max_retries:
+                    raise Exception(
+                        f"Maximum number of retries ({max_retries}) exceeded."
+                    )
+
+                # Increment the delay
+                delay *= exponential_base * (1 + jitter * random.random())
+
+                # Sleep for the delay
+                time.sleep(delay)
+
+            # Raise exceptions for any errors not specified
+            except Exception as e:
+                raise e
+
+    return wrapper
