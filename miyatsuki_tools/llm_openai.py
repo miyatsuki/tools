@@ -139,3 +139,16 @@ def retry_with_exponential_backoff(
         return wrapper
 
     return decorator
+
+
+def trim_prompt(
+    prompt_base: str, adjusting_text: str, max_tokens: int, model: str = "gpt-3.5-turbo"
+):
+    import tiktoken
+
+    enc = tiktoken.encoding_for_model(model)
+    for i in range(len(adjusting_text) - 1, -1, -1):
+        prompt = prompt_base.format(adjusting_text[:i]).strip()
+        tokens = enc.encode(prompt)
+        if len(tokens) < max_tokens:
+            return prompt, i
