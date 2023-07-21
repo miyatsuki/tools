@@ -147,8 +147,17 @@ def trim_prompt(
     import tiktoken
 
     enc = tiktoken.encoding_for_model(model)
+    prompt = prompt_base.format(adjusting_text).strip()
+    tokens = enc.encode(prompt)
+
+    # そもそもmax_tokensより小さい場合はそのまま返す
+    if len(tokens) < max_tokens:
+        return prompt, len(adjusting_text) - 1
+
     for i in range(len(adjusting_text) - 1, -1, -1):
         prompt = prompt_base.format(adjusting_text[:i]).strip()
         tokens = enc.encode(prompt)
         if len(tokens) < max_tokens:
             return prompt, i
+
+    raise ValueError("prompt_base larger than max_tokens")
