@@ -5,6 +5,7 @@ from json import JSONDecodeError
 from typing import Optional
 
 import openai
+from openai import RateLimitError
 
 
 def extract_codeblock(output: str):
@@ -100,7 +101,7 @@ def retry_with_exponential_backoff(
     exponential_base: float = 2,
     jitter: bool = True,
     max_retries: Optional[int] = 10,
-    errors: tuple = (openai.error.RateLimitError,),
+    errors: tuple = (RateLimitError,),
 ):
     """Retry a function with exponential backoff."""
 
