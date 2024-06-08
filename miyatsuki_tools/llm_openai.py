@@ -8,6 +8,22 @@ import openai
 from openai import RateLimitError
 
 
+def parse_json(text: str):
+    # 普通にパースする
+    try:
+        return json.loads(text)
+    except JSONDecodeError:
+        pass
+
+    if "```json" in text:
+        # ```jsonから```の間を取り出してパースする
+        start = text.index("```json") + 7
+        end = text.index("```", start)
+        return json.loads(text[start:end])
+
+    raise ValueError("JSON形式の文字列をパースできませんでした", text)
+
+
 def extract_codeblock(output: str):
     if "```" not in output:
         return output
