@@ -166,6 +166,10 @@ def fetch_toplevel_comments(video_id, page_token=None) -> list[TopLevelComment]:
 
     response = requests.get(url, params=params)
     data = response.json()
+
+    if "items" not in data:
+        return []
+
     comments = [
         TopLevelComment(
             video_id,
