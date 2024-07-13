@@ -1,8 +1,9 @@
 import json
 import random
 import time
+from dataclasses import dataclass, fields
 from json import JSONDecodeError
-from typing import Optional
+from typing import Optional, get_type_hints
 
 import openai
 from openai import RateLimitError
@@ -24,6 +25,73 @@ def parse_json(text: str):
     raise ValueError("JSON形式の文字列をパースできませんでした", text)
 
 
+def cast(
+    cls: dataclass,
+    target: str,
+    models: list[str],
+    optional_instructions: str = "",
+    api_key: str | None = None,
+):
+    type_hints = get_type_hints(cls)
+    properties_dict = {}
+    for field in fields(cls):
+        field_name = field.name
+        field_type = type_hints[field_name]
+        properties_dict[field_name] = str(field_type)
+
+    for key, value in properties_dict.items():
+        # <class 'str'>のようなフォーマットだったらstrだけ取り出す
+        if value.startswith("<class '") and value.endswith("'>"):
+            properties_dict[key] = value[8:-2]
+        else:
+            properties_dict[key] = value
+
+    prompt = f"""
+入力文から出力に必要な情報を取得し、JSON形式で返してください。
+JSON以外は返却しないでください
+{optional_instructions}
+
+## 入力
+{target}
+
+## フィールドの情報
+{cls.__doc__}
+
+## 出力
+{json.dumps(properties_dict, indent=2, ensure_ascii=False)}
+""".strip()
+
+    for model in models:
+        if model.startswith("gpt-"):
+            from openai import OpenAI
+
+            client = OpenAI(api_key=api_key)
+            response = client.chat.completions.create(
+                model=model,
+                messages=[{"role": "user", "content": prompt}],
+                response_format={"type": "json_object"},
+            )
+            json_str = response.choices[0].message.content
+        elif model.startswith("claude-"):
+            import anthropic
+
+            response = anthropic.Anthropic(api_key=api_key).messages.create(
+                model=model,
+                max_tokens=1024,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            json_str = response.content[0].text
+        else:
+            raise NotImplementedError(f"model {model} is not supported")
+
+        try:
+            return cls(**parse_json(json_str))
+        except:
+            continue
+
+    raise ValueError("Failed to cast")
+
+
 def extract_codeblock(output: str):
     if "```" not in output:
         return output
@@ -40,7 +108,7 @@ def extract_codeblock(output: str):
 
 
 def correct_json(text: str, model: str):
-    prompt = f"""
+    prompt = f"""s
     以下のJSONをパース可能に修正してください。修正点は記載せず、JSONだけを返してください。
     ```json
     {text}
