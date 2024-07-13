@@ -3,7 +3,7 @@ import random
 import time
 from dataclasses import dataclass, fields
 from json import JSONDecodeError
-from typing import Optional, get_type_hints
+from typing import Any, Optional, get_type_hints
 
 import openai
 from openai import RateLimitError
@@ -28,9 +28,10 @@ def parse_json(text: str):
 def cast(
     cls: dataclass,
     target: str,
-    models: list[str],
-    optional_instructions: str = "",
+    model: str,
+    additional_instructions: str = "",
     api_key: str | None = None,
+    llm_options: dict[str, Any] = {},
 ):
     type_hints = get_type_hints(cls)
     properties_dict = {}
@@ -49,7 +50,7 @@ def cast(
     prompt = f"""
 入力文から出力に必要な情報を取得し、JSON形式で返してください。
 JSON以外は返却しないでください
-{optional_instructions}
+{additional_instructions}
 
 ## 入力
 {target}
@@ -61,35 +62,31 @@ JSON以外は返却しないでください
 {json.dumps(properties_dict, indent=2, ensure_ascii=False)}
 """.strip()
 
-    for model in models:
-        if model.startswith("gpt-"):
-            from openai import OpenAI
+    if model.startswith("gpt-"):
+        from openai import OpenAI
 
-            client = OpenAI(api_key=api_key)
-            response = client.chat.completions.create(
-                model=model,
-                messages=[{"role": "user", "content": prompt}],
-                response_format={"type": "json_object"},
-            )
-            json_str = response.choices[0].message.content
-        elif model.startswith("claude-"):
-            import anthropic
+        client = OpenAI(api_key=api_key)
+        response = client.chat.completions.create(
+            model=model,
+            messages=[{"role": "user", "content": prompt}],
+            response_format={"type": "json_object"},
+            **llm_options
+        )
+        json_str = response.choices[0].message.content
+    elif model.startswith("claude-"):
+        import anthropic
 
-            response = anthropic.Anthropic(api_key=api_key).messages.create(
-                model=model,
-                max_tokens=1024,
-                messages=[{"role": "user", "content": prompt}],
-            )
-            json_str = response.content[0].text
-        else:
-            raise NotImplementedError(f"model {model} is not supported")
+        response = anthropic.Anthropic(api_key=api_key).messages.create(
+            model=model,
+            max_tokens=1024,
+            messages=[{"role": "user", "content": prompt}],
+            **llm_options
+        )
+        json_str = response.content[0].text
+    else:
+        raise NotImplementedError(f"model {model} is not supported")
 
-        try:
-            return cls(**parse_json(json_str))
-        except:
-            continue
-
-    raise ValueError("Failed to cast")
+    return cls(**parse_json(json_str))
 
 
 def extract_codeblock(output: str):
