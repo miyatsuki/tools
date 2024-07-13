@@ -2,7 +2,7 @@ from setuptools import find_packages, setup
 
 setup(
     name="miyatsuki_tools",
-    version="0.1.2",
+    version="0.1.3",
     packages=find_packages(),
     install_requires=[],
     author="miyatsuki",
