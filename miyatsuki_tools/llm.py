@@ -25,9 +25,9 @@ def parse_json(text: str):
     raise ValueError("JSON形式の文字列をパースできませんでした", text)
 
 
-def cast(
+def hypercast(
+    input_str: str,
     cls: dataclass,
-    target: str,
     model: str,
     additional_instructions: str = "",
     api_key: str | None = None,
@@ -53,7 +53,7 @@ JSON以外は返却しないでください
 {additional_instructions}
 
 ## 入力
-{target}
+{input_str}
 
 ## フィールドの情報
 {cls.__doc__}
@@ -70,17 +70,17 @@ JSON以外は返却しないでください
             model=model,
             messages=[{"role": "user", "content": prompt}],
             response_format={"type": "json_object"},
-            **llm_options
+            **llm_options,
         )
         json_str = response.choices[0].message.content
     elif model.startswith("claude-"):
         import anthropic
 
+        llm_arguments = {"max_tokens": 1024} | llm_options
         response = anthropic.Anthropic(api_key=api_key).messages.create(
             model=model,
-            max_tokens=1024,
             messages=[{"role": "user", "content": prompt}],
-            **llm_options
+            **llm_arguments,
         )
         json_str = response.content[0].text
     else:
